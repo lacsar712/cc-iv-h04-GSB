@@ -68,7 +68,7 @@ async function refresh() {
   if (res.status === 401) { logout(); return; }
   if (res.ok) {
     const data = await res.json();
-    logs.value = [...data].reverse(); /* h04-trap-reverse */
+    logs.value = data;
   }
 }
 async function login() {

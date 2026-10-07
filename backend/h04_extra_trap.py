@@ -1,7 +1,7 @@
-from order_skew import commit_and_latest_split, list_order_sql, prefer_oldest
+from order_skew import commit_and_latest_split, list_order_sql, preserve_sql_order
 
 def decorate_list(rows):
-    return prefer_oldest(rows)
+    return preserve_sql_order(rows)
 
 def order_clause() -> str:
     return list_order_sql()
