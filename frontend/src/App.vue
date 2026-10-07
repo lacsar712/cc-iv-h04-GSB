@@ -25,6 +25,16 @@
         <p v-if="error" class="err">{{ error }}</p>
       </section>
       <section>
+        <label>按组串查最新</label>
+        <input v-model="queryCode" placeholder="例如 阵列A-串03" />
+        <button :disabled="loading" @click="queryLatest">查询最新</button>
+        <p v-if="latestError" class="err">{{ latestError }}</p>
+        <p v-if="latestResult" class="latest">
+          最新单 #{{ latestResult.id }}：{{ latestResult.string_code }}，FF {{ latestResult.fill_factor }}，
+          {{ latestResult.status === "pending" ? "待处理" : "已完成" }}<template v-if="latestResult.verdict">，{{ latestResult.verdict }}</template>
+        </p>
+      </section>
+      <section>
         <table>
           <thead>
             <tr><th>编号</th><th>组串</th><th>Voc</th><th>Isc</th><th>FF</th><th>状态</th><th>结论</th></tr>
@@ -55,6 +65,9 @@ const stringCode = ref("");
 const voc = ref("");
 const isc = ref("");
 const ff = ref("");
+const queryCode = ref("");
+const latestResult = ref(null);
+const latestError = ref("");
 const error = ref("");
 const loading = ref(false);
 let timer;
@@ -68,7 +81,7 @@ async function refresh() {
   if (res.status === 401) { logout(); return; }
   if (res.ok) {
     const data = await res.json();
-    logs.value = [...data].reverse(); /* h04-trap-reverse */
+    logs.value = data;
   }
 }
 async function login() {
@@ -94,6 +107,20 @@ function logout() {
   session.value = null;
   logs.value = [];
   localStorage.removeItem("pv_session");
+}
+async function queryLatest() {
+  latestError.value = "";
+  latestResult.value = null;
+  const code = queryCode.value.trim();
+  if (!code) { latestError.value = "组串编号不能为空"; return; }
+  try {
+    const res = await fetch("/api/logs/latest?string_code=" + encodeURIComponent(code), { headers: headers() });
+    if (res.status === 401) { logout(); return; }
+    if (res.status === 404) { latestError.value = "该组串暂无扫描记录"; return; }
+    const data = await res.json();
+    if (!res.ok) { latestError.value = data.detail || "查询失败"; return; }
+    latestResult.value = data;
+  } catch { latestError.value = "查询时网络异常"; }
 }
 async function submit() {
   error.value = "";
@@ -139,6 +166,7 @@ input { width: 100%; box-sizing: border-box; padding: 0.5rem 0.65rem; border-rad
 button { cursor: pointer; padding: 0.5rem 1rem; border: none; border-radius: 6px; background: #16a34a; color: #fff; font-weight: 600; margin-right: 0.4rem; }
 button.secondary { background: #365314; }
 .err { color: #fecaca; }
+.latest { color: #bbf7d0; }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th, td { text-align: left; padding: 0.45rem; border-bottom: 1px solid #166534; }
 .tag { padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }

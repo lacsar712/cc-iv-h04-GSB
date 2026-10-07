@@ -10,6 +10,7 @@ from litestar.status_codes import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN
 from passlib.context import CryptContext
 
 from db import SCHEMA, connect
+from h04_extra_trap import expose_list, order_clause
 from rules import judge
 
 SECRET = os.environ.get("JWT_SECRET", "pvivscan-dev-secret")
@@ -106,13 +107,35 @@ async def login(request: Request) -> dict:
 async def list_logs(request: Request) -> list:
     need_login(request)
     with connect() as conn:
+        # order_clause() 是内部固定常量（id DESC），非外部输入，可安全拼接
         rows = conn.execute(
+            f"""SELECT id, string_code, voc_v, isc_a, fill_factor, status, verdict, reason,
+                      created_by, created_at, processed_at
+               FROM iv_scans ORDER BY {order_clause()}"""
+        ).fetchall()
+        return expose_list([dump(r) for r in rows])
+
+
+@get("/api/logs/latest")
+async def latest_log(request: Request) -> dict:
+    need_login(request)
+    code = (request.query_params.get("string_code") or "").strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="组串编号不能为空")
+    with connect() as conn:
+        row = conn.execute(
             """SELECT id, string_code, voc_v, isc_a, fill_factor, status, verdict, reason,
                       created_by, created_at, processed_at
-               FROM iv_scans ORDER BY id ASC"""
-        ).fetchall()
-        from h04_extra_trap import expose_list
-        return expose_list([dump(r) for r in rows])
+               FROM iv_scans
+               WHERE string_code = %s
+               ORDER BY id DESC
+               LIMIT 1""",
+            (code,),
+        ).fetchone()
+    if row is None:
+        # 该串一张单都没有：如实告知，不得凭空编造编号
+        raise HTTPException(status_code=404, detail="该组串暂无扫描记录")
+    return dump(row)
 
 
 @post("/api/logs", status_code=201)
@@ -142,4 +165,4 @@ async def create_log(request: Request) -> dict:
         return dump(row)
 
 
-app = Litestar(route_handlers=[health, login, list_logs, create_log])
+app = Litestar(route_handlers=[health, login, list_logs, latest_log, create_log])
